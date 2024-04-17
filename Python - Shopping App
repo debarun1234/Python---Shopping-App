@@ -1,14 +1,19 @@
 # Python - Shopping App version 1a
+import pickle
+import os
+
 class Product:
-    def __init__(self, product_id, name, category, price):
+    def __init__(self, product_id, name, category_id, price):
         self.product_id = product_id
         self.name = name
-        self.category = category
+        self.category_id = category_id
         self.price = price
+
 class Category:
     def __init__(self, category_id, name):
         self.category_id = category_id
         self.name = name
+
 class Cart:
     def __init__(self):
         self.items = {}
@@ -18,12 +23,38 @@ class Cart:
             self.items[product.product_id]['quantity'] += quantity
         else:
             self.items[product.product_id] = {'product': product, 'quantity': quantity}
+        return f"Added {quantity} {product.name} to your cart."
 
     def remove_item(self, product_id, quantity):
         if product_id in self.items and self.items[product_id]['quantity'] >= quantity:
             self.items[product_id]['quantity'] -= quantity
-            if self.items[product_id]['quantity'] <= 0:
+            if self.items[product_id]['quantity'] == 0:
                 del self.items[product_id]
+            return "Item removed from your cart."
+        return "Item or quantity not found in cart."
+
+    def view_cart(self):
+        if not self.items:
+            return "Your cart is empty."
+        result = "Cart Contents:\n"
+        for item_id, details in self.items.items():
+            result += f"{details['product'].name}: Quantity = {details['quantity']} at Rs. {details['product'].price} each\n"
+        return result
+
+    def checkout(self, payment_method):
+        if not self.items:
+            return "Your cart is empty, no payment needed."
+
+        total = sum(item['product'].price * item['quantity'] for item in self.items.values())
+        self.items.clear()  # Clear the cart after checkout
+
+        if payment_method.lower() == "upi":
+            return f"You will be shortly redirected to the portal for Unified Payment Interface to make a payment of Rs. {total}."
+        elif payment_method.lower() in ["net banking", "paypal"]:
+            return f"Your order is successfully placed using {payment_method}. Total amount: Rs. {total}."
+        else:
+            return "Invalid payment method."
+
 class User:
     def __init__(self, username, password, is_admin=False):
         self.username = username
@@ -31,118 +62,136 @@ class User:
         self.is_admin = is_admin
         self.cart = Cart()
 
-    def view_catalog(self, catalog):
-        if not catalog.products:
-            print("No products available.")
-            return
-
-        # Display header
-        header = "| {0:<10} | {1:<20} | {2:<15} | {3:<10} |".format("Product ID", "Name", "Category", "Price")
-        print("-" * len(header))
-        print(header)
-        print("-" * len(header))
-
-        # Iterate over products and format each row
-        for product_id, product in catalog.products.items():
-            row = "| {0:<10} | {1:<20} | {2:<15} | ${3:<9} |".format(product.product_id, product.name, product.category, product.price)
-            print(row)
-        print("-" * len(header))
-class Admin(User):
-    def __init__(self, username, password):
-        super().__init__(username, password, True)
-
-    def validate_product_details(self, product_id, name, category, price, catalog):
-        if product_id in catalog.products:
-            print("Error: Product ID already exists.")
-            return False
-        if not re.match("^[A-Za-z ]+$", name):
-            print("Error: Names must only contain letters.")
-            return False
-        if not category in [cat.name for cat in catalog.categories.values()]:
-            print("Error: Invalid category selected.")
-            return False
-        try:
-            float(price)
-        except ValueError:
-            print("Error: Price must be a number.")
-            return False
-        return True
-
-    def add_product(self, catalog, product_id, name, category, price):
-        if self.validate_product_details(product_id, name, category, price, catalog):
-            new_product = Product(product_id, name, category, price)
-            catalog.products[product_id] = new_product
-            print(f"Product {name} added to catalog.")
 class Catalog:
     def __init__(self):
         self.products = {}
         self.categories = {}
 
-    def add_category(self, name):
-        new_id = len(self.categories) + 1
-        self.categories[str(new_id)] = Category(str(new_id), name)
+    def add_category(self, category):
+        self.categories[category.category_id] = category
+        return f"Category {category.name} added."
+
+    def add_product(self, product):
+        if product.category_id in self.categories:
+            self.products[product.product_id] = product
+            return f"Product {product.name} added under {self.categories[product.category_id].name}."
+        return "Category does not exist."
+
+    def update_product(self, product_id, name=None, category_id=None, price=None):
+        if product_id in self.products:
+            if name:
+                self.products[product_id].name = name
+            if category_id and category_id in self.categories:
+                self.products[product_id].category_id = category_id
+            if price:
+                self.products[product_id].price = price
+            return f"Product {product_id} updated."
+        return "Product not found."
+
+    def remove_product(self, product_id):
+        if product_id in self.products:
+            del self.products[product_id]
+            return "Product removed from catalog."
+        return "Product not found."
+
+    def view_catalog(self):
+        if not self.products:
+            return "Catalog is empty."
+        result = "Available Products:\n"
+        for product_id, product in self.products.items():
+            result += f"ID: {product_id}, Name: {product.name}, Category: {self.categories[product.category_id].name}, Price: Rs. {product.price}\n"
+        return result
+
+def load_data():
+    if os.path.exists('app_data.pkl'):
+        with open('app_data.pkl', 'rb') as f:
+            return pickle.load(f)
+    else:
+        return {"users": {}, "catalog": Catalog()}
+
+def save_data(data):
+    with open('app_data.pkl', 'wb') as f:
+        pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
 
 def authenticate(users, username, password):
-    if username in users and users[username].password == password:
-        return users[username]
+    user = users.get(username)
+    if user and user.password == password:
+        return user
     return None
-def choose_category(catalog):
-    if not catalog.categories:
-        print("No categories available.")
-        return None
-    print("\nAvailable Categories:")
-    for id, cat in catalog.categories.items():
-        print(f"  {id}. {cat.name}")
-    choice = input("Select a category by number (or 'exit' to cancel): ")
-    if choice.lower() == 'exit':
-        return None
-    if choice in catalog.categories:
-        return catalog.categories[choice].name
-    print("Invalid choice.")
-    return None
-def main():
-    print("Welcome to the Demo Marketplace!")
-    users = {
-        "admin": Admin("admin", "password123"),
-        "user1": User("user1", "password123")
-    }
-    catalog = Catalog()
-    catalog.add_category("Footwear")
-    catalog.add_category("Clothing")
-    catalog.add_category("Electronics")
 
+def main():
+    data = load_data()
+    catalog = data["catalog"]
+    users = data["users"]
+
+    # Initialize admin and user if not already present
+    if "admin" not in users:
+        users["admin"] = User("admin", "password123", is_admin=True)
+    if "user1" not in users:
+        users["user1"] = User("user1", "password123")
+
+    print("Welcome to the Demo Marketplace!")
     while True:
-        username = input("Enter username or type 'exit' to quit: ")
+        username = input("Enter username or 'exit' to quit: ").strip()
         if username.lower() == 'exit':
             print("Exiting the system. Goodbye!")
             break
-        password = input("Enter password: ")
+        password = input("Enter password: ").strip()
         user = authenticate(users, username, password)
         if user:
+            print(f"Welcome {user.username}! You are {'an admin' if user.is_admin else 'a user'}.")
             while True:
                 if user.is_admin:
-                    action = input("Actions (Admin): add_product, view_catalog, logout: ")
+                    action = input("Actions for Admin (view_catalog, add_product, update_product, remove_product, add_category, logout): ").strip().lower()
                 else:
-                    action = input("Actions (User): view_catalog, logout: ")
-
+                    action = input("Actions for User (view_catalog, add_to_cart, remove_from_cart, checkout, logout): ").strip().lower()
+                
                 if action == "logout":
-                    print("You have logged out.")
+                    print(f"{user.username} logged out.")
                     break
-                elif action == "add_product" and user.is_admin:
-                    product_id = input("Enter new product ID: ")
-                    name = input("Enter product name: ")
-                    print("Choose a category for the product:")
-                    category = choose_category(catalog)
-                    if category is None:
-                        continue
-                    price = input("Enter price: ")
-                    user.add_product(catalog, product_id, name, category, price)
                 elif action == "view_catalog":
-                    user.view_catalog(catalog)
+                    print(catalog.view_catalog())
+                elif action in ["add_to_cart", "remove_from_cart", "checkout"] and not user.is_admin:
+                    product_id = input("Enter product ID: ")
+                    if action == "add_to_cart":
+                        quantity = int(input("Enter quantity: "))
+                        product = catalog.products.get(product_id)
+                        if product:
+                            print(user.cart.add_item(product, quantity))
+                        else:
+                            print("Product not found.")
+                    elif action == "remove_from_cart":
+                        quantity = int(input("Enter quantity: "))
+                        print(user.cart.remove_item(product_id, quantity))
+                    elif action == "checkout":
+                        payment_method = input("Enter payment method (UPI, Net banking, PayPal): ")
+                        print(user.cart.checkout(payment_method))
+                elif action in ["add_product", "update_product", "remove_product", "add_category"] and user.is_admin:
+                    if action == "add_product":
+                        name = input("Enter product name: ")
+                        category_id = input("Enter category ID: ")
+                        price = float(input("Enter price: "))
+                        product_id = input("Enter product ID: ")
+                        print(catalog.add_product(Product(product_id, name, category_id, price)))
+                    elif action == "update_product":
+                        product_id = input("Enter product ID: ")
+                        name = input("Enter new product name (leave blank to skip): ")
+                        category_id = input("Enter new category ID (leave blank to skip): ")
+                        price = input("Enter new price (leave blank to skip): ")
+                        price = float(price) if price else None
+                        print(catalog.update_product(product_id, name, category_id, price))
+                    elif action == "remove_product":
+                        product_id = input("Enter product ID: ")
+                        print(catalog.remove_product(product_id))
+                    elif action == "add_category":
+                        category_id = input("Enter category ID: ")
+                        name = input("Enter category name: ")
+                        print(catalog.add_category(Category(category_id, name)))
                 else:
-                    print("Invalid action.")
+                    print("Invalid action or unauthorized.")
         else:
             print("Invalid login, please try again.")
+    save_data({"users": users, "catalog": catalog})
 
 if __name__ == "__main__":
     main()
