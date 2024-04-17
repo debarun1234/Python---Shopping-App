@@ -23,7 +23,7 @@ You need Python 3.x installed on your system to run this application. You can do
 Clone the repository to your local machine:
 
 ```bash
-git clone [https://your-repository-url.git](https://github.com/debarun1234/Python---Shopping-App)
+git clone [https://github.com/debarun1234/Python---Shopping-App.git](https://github.com/debarun1234/Python---Shopping-App.git)
 cd path-to-your-project
 ```
 No additional libraries are required to run the application.
